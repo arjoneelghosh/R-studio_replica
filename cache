@@ -1,0 +1,28 @@
+import pandas as pd
+import streamlit as st
+
+def preprocess_data(data):
+    """Preprocess the uploaded data, including missing value handling and encoding."""
+    # Sidebar options for preprocessing
+    st.sidebar.header("Data Preprocessing")
+    columns = st.sidebar.multiselect("Select columns to use", data.columns, default=data.columns)
+
+    # Fill missing values if checked
+    if st.sidebar.checkbox("Fill missing values"):
+        fill_value = st.sidebar.number_input("Fill missing values with:", value=0)
+        data = data.fillna(fill_value)
+
+    # Display preprocessed data
+    st.write("### Preprocessed Data")
+    st.dataframe(data[columns])
+
+    # Encode categorical variables
+    categorical_cols = data.select_dtypes(include=['object']).columns.tolist()
+    if 'Date' in categorical_cols:
+        categorical_cols.remove('Date')
+
+    data = pd.get_dummies(data, columns=categorical_cols, drop_first=True)
+    st.write("### Data with Encoded Categorical Variables")
+    st.dataframe(data)
+
+    return data

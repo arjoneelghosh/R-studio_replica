@@ -1,0 +1,121 @@
+import pandas as pd
+import streamlit as st
+
+
+def edit_data(data):
+    """Interactive editor for modifying data with validation, undo/redo, and customization options."""
+    
+    # Initialize undo/redo history in session state
+    if "edit_history" not in st.session_state:
+        st.session_state.edit_history = []
+        st.session_state.redo_stack = []
+
+    # Save the current state of data before making any changes
+    def save_to_history(data):
+        if len(st.session_state.edit_history) > 50:  # Limit history to 50 actions
+            st.session_state.edit_history.pop(0)  # Remove the oldest action
+        st.session_state.edit_history.append(data.copy())
+        st.session_state.redo_stack.clear()  # Clear redo stack on new action
+
+    # Undo last action
+    if st.sidebar.button("Undo"):
+        if st.session_state.edit_history:
+            st.session_state.redo_stack.append(data.copy())
+            data = st.session_state.edit_history.pop()
+            st.success("Undo successful!")
+        else:
+            st.warning("No more actions to undo.")
+
+    # Redo last undone action
+    if st.sidebar.button("Redo"):
+        if st.session_state.redo_stack:
+            st.session_state.edit_history.append(data.copy())
+            data = st.session_state.redo_stack.pop()
+            st.success("Redo successful!")
+        else:
+            st.warning("No more actions to redo.")
+
+    # Display current dataset
+    st.write("### Current Dataset")
+    display_rows = st.sidebar.slider(
+        "Rows to display", min_value=5, max_value=len(data), value=10, step=1
+    )
+    st.dataframe(data.head(display_rows))  # Show limited rows based on user input
+
+    # Sidebar options for editing
+    st.sidebar.header("Edit Data Options")
+
+    # Add Row
+    if st.sidebar.button("Add Row"):
+        save_to_history(data)
+        new_row = {col: "" for col in data.columns}
+        data = pd.concat([data, pd.DataFrame([new_row])], ignore_index=True)
+        st.success("Row added successfully!")
+
+    # Delete Rows
+    selected_rows = st.sidebar.multiselect(
+        "Select rows to delete", options=data.index, format_func=lambda x: f"Row {x}"
+    )
+    if st.sidebar.button("Delete Selected Row(s)") and selected_rows:
+        save_to_history(data)
+        data = data.drop(index=selected_rows).reset_index(drop=True)
+        st.success("Selected rows deleted successfully!")
+
+    # Add Column with validation
+    new_col_name = st.sidebar.text_input("New Column Name:")
+    if st.sidebar.button("Add Column"):
+        if not new_col_name.strip():
+            st.warning("Column name cannot be empty.")
+        elif new_col_name in data.columns:
+            st.warning("Column name already exists.")
+        else:
+            save_to_history(data)
+            data[new_col_name] = ""
+            st.success(f"Column '{new_col_name}' added successfully!")
+
+    # Edit Column Names
+    st.sidebar.header("Edit Column Names")
+    edited_column_names = {}
+    for col in data.columns:
+        new_name = st.sidebar.text_input(f"Rename column '{col}' to:", value=col)
+        if new_name != col:
+            if not new_name.strip():
+                st.warning("Column name cannot be empty.")
+            elif new_name in data.columns:
+                st.warning(f"Column name '{new_name}' already exists.")
+            else:
+                edited_column_names[col] = new_name
+
+    if edited_column_names:
+        save_to_history(data)
+        data.rename(columns=edited_column_names, inplace=True)
+        st.success("Column names updated successfully!")
+
+    # Delete Columns
+    selected_columns = st.sidebar.multiselect(
+        "Select columns to delete", options=data.columns
+    )
+    if st.sidebar.button("Delete Selected Column(s)") and selected_columns:
+        save_to_history(data)
+        data = data.drop(columns=selected_columns)
+        st.success("Selected columns deleted successfully!")
+
+    # Save edited data using Streamlit's interactive data editor
+    st.write("### Editable Dataset")
+    edited_data = st.data_editor(data)
+
+    # Save the updated dataset to session state
+    st.session_state.edited_data = edited_data
+
+    # Provide download option
+    if st.sidebar.button("Download Edited Data as CSV"):
+        csv = edited_data.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            "Download CSV",
+            data=csv,
+            file_name="edited_data.csv",
+            mime="text/csv",
+        )
+
+    # Return the updated dataset
+    return edited_data

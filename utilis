@@ -1,0 +1,72 @@
+import pandas as pd
+import numpy as np
+import streamlit as st
+
+def ensure_datetime(data, column_name):
+    """Convert a column to datetime format and handle errors."""
+    try:
+        data[column_name] = pd.to_datetime(data[column_name], errors='coerce')
+        if data[column_name].isna().any():
+            st.warning(f"Some rows in '{column_name}' could not be converted to datetime. Check your data.")
+        return data
+    except Exception as e:
+        st.error(f"Error converting '{column_name}' to datetime: {e}")
+        return data
+
+def fill_missing_values(data, strategy="mean", value=None):
+    """Fill missing values in the dataset based on the specified strategy."""
+    if strategy == "mean":
+        return data.fillna(data.mean())
+    elif strategy == "median":
+        return data.fillna(data.median())
+    elif strategy == "mode":
+        return data.fillna(data.mode().iloc[0])
+    elif strategy == "constant" and value is not None:
+        return data.fillna(value)
+    else:
+        st.error("Invalid strategy or missing value for constant strategy.")
+        return data
+
+def encode_categorical(data, exclude_columns=None):
+    """Encode categorical variables using one-hot encoding."""
+    exclude_columns = exclude_columns or []
+    categorical_cols = data.select_dtypes(include=['object', 'category']).columns.tolist()
+    categorical_cols = [col for col in categorical_cols if col not in exclude_columns]
+    return pd.get_dummies(data, columns=categorical_cols, drop_first=True)
+
+def plot_correlation_heatmap(data):
+    """Plot a correlation heatmap for numeric data."""
+    numeric_data = data.select_dtypes(include=[np.number])
+    if numeric_data.empty:
+        st.write("No numeric columns available for correlation analysis.")
+    else:
+        import seaborn as sns
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots(figsize=(10, 8))
+        sns.heatmap(numeric_data.corr(), annot=True, cmap="coolwarm", ax=ax, fmt=".2f", linewidths=0.5)
+        st.pyplot(fig)
+
+def standardize_data(data, columns):
+    """Standardize numeric data to have zero mean and unit variance."""
+    from sklearn.preprocessing import StandardScaler
+    scaler = StandardScaler()
+    try:
+        data[columns] = scaler.fit_transform(data[columns])
+        return data
+    except Exception as e:
+        st.error(f"Error during standardization: {e}")
+        return data
+
+def validate_data(data):
+    """Perform basic validation checks on the dataset."""
+    if data.empty:
+        st.error("Dataset is empty. Please upload a valid dataset.")
+        return False
+
+    if data.isnull().sum().sum() > 0:
+        st.warning("Dataset contains missing values. Consider handling them before analysis.")
+
+    if data.select_dtypes(include=['object', 'category']).empty:
+        st.warning("No categorical columns detected for encoding.")
+
+    return True

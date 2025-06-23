@@ -1,0 +1,63 @@
+import pandas as pd
+import streamlit as st
+from prophet import Prophet
+import matplotlib.pyplot as plt
+
+def forecast_with_adv_prophet(data):
+    """Perform time series forecasting using Prophet."""
+    st.sidebar.header("Forecasting with Prophet")
+
+    # Step 1: Combine Year and Month into a datetime column if needed
+    if 'Date' not in data.columns:
+        if 'Year' in data.columns and 'Month' in data.columns:
+            data['Date'] = pd.to_datetime(data['Year'].astype(str) + '-' + data['Month'].astype(str))
+        else:
+            st.error("Dataset must contain 'Year' and 'Month' columns or a 'Date' column.")
+            return
+
+    # Step 2: Allow user to select target column
+    target_column = st.sidebar.selectbox("Select Target Column", options=[col for col in data.columns if col not in ['Year', 'Month', 'Date']], key="prophet_target_column")
+
+    # Step 3: Prepare the dataset for Prophet
+    data = data.sort_values(by='Date').dropna(subset=['Date', target_column])
+    data = data.rename(columns={'Date': 'ds', target_column: 'y'})  # Rename columns for Prophet
+
+    # Step 4: Prophet model configuration
+    st.write("### Prophet Model Configuration")
+    yearly_seasonality = st.sidebar.checkbox("Enable Yearly Seasonality", value=True)
+    weekly_seasonality = st.sidebar.checkbox("Enable Weekly Seasonality", value=False)
+    daily_seasonality = st.sidebar.checkbox("Enable Daily Seasonality", value=False)
+    changepoint_prior_scale = st.sidebar.slider("Changepoint Prior Scale", min_value=0.01, max_value=0.5, value=0.05, step=0.01)
+
+    try:
+        # Step 5: Fit Prophet model
+        model = Prophet(
+            yearly_seasonality=yearly_seasonality,
+            weekly_seasonality=weekly_seasonality,
+            daily_seasonality=daily_seasonality,
+            changepoint_prior_scale=changepoint_prior_scale
+        )
+        model.fit(data)
+
+        # Step 6: Forecast future values
+        forecast_periods = st.sidebar.slider("Number of periods to forecast", min_value=1, max_value=365, value=30, key="prophet_forecast_periods")
+        future = model.make_future_dataframe(periods=forecast_periods, freq='M')
+        forecast = model.predict(future)
+
+        # Step 7: Plot the forecast
+        st.write("### Prophet Forecast Plot")
+        fig1 = model.plot(forecast)
+        st.pyplot(fig1)
+
+        # Step 8: Plot components
+        st.write("### Forecast Components")
+        fig2 = model.plot_components(forecast)
+        st.pyplot(fig2)
+
+        # Step 9: Display forecasted values
+        st.write("### Forecasted Values")
+        st.dataframe(forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']])
+
+    except Exception as e:
+        st.error(f"Error in Prophet forecasting: {e}")
+

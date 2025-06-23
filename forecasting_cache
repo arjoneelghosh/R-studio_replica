@@ -1,0 +1,79 @@
+import pandas as pd
+import streamlit as st
+from pmdarima import auto_arima
+import matplotlib.pyplot as plt
+import numpy as np
+
+def forecast_with_arima(data):
+    """Perform time series forecasting using ARIMA with automatic order selection and display MAPE."""
+    st.sidebar.header("Forecasting with ARIMA")
+
+    # Check and create the 'Date' column if needed
+    if 'Date' not in data.columns:
+        if {'Year', 'Month'}.issubset(data.columns):
+            data['Date'] = pd.to_datetime(data['Year'].astype(str) + '-' + data['Month'].astype(str))
+        else:
+            st.error("Dataset must contain 'Year' and 'Month' columns or a 'Date' column.")
+            return
+
+    # Select target column
+    target_column = st.sidebar.selectbox(
+        "Select Target Column",
+        options=[col for col in data.columns if col not in ['Year', 'Month', 'Date']],
+        key="arima_target_column"
+    )
+
+    # Prepare data
+    data = data.sort_values(by='Date').dropna(subset=['Date', target_column])
+    data.rename(columns={'Date': 'ds', target_column: 'y'}, inplace=True)
+    data.set_index('ds', inplace=True)
+
+    st.write("### ARIMA Forecasting")
+
+    # Forecast period input
+    forecast_periods = st.sidebar.number_input("Forecast Periods", min_value=1, max_value=365, value=30)
+
+    if st.button("Run ARIMA Forecasting"):
+        try:
+            # Auto ARIMA for best parameters
+            model = auto_arima(data['y'], seasonal=True, trace=False, suppress_warnings=True)
+
+            # Infer frequency or default to monthly
+            freq = pd.infer_freq(data.index) or 'M'
+
+            # Generate future dates
+            future_dates = pd.date_range(start=data.index[-1], periods=forecast_periods + 1, freq=freq)[1:]
+
+            # Make predictions
+            forecast_values = model.predict(n_periods=forecast_periods)
+
+            # Forecast DataFrame
+            forecast_df = pd.DataFrame({'ds': future_dates, 'yhat': forecast_values})
+
+            # Calculate MAPE if enough data is available
+            min_length = min(len(data['y']), len(forecast_values))
+            actuals = data['y'][-min_length:].values
+            preds = forecast_values[:min_length]
+            mape = np.mean(np.abs((actuals - preds) / actuals)) * 100 if min_length > 0 else None
+
+            # Display MAPE
+            if mape is not None:
+                st.write(f"### Model Accuracy (MAPE): {mape:.2f}%")
+
+            # Plot actual vs forecast
+            plt.figure(figsize=(12, 6))
+            plt.plot(data.index, data['y'], label="Actual", marker='o', color='blue')
+            plt.plot(forecast_df['ds'], forecast_df['yhat'], label="Forecast", linestyle='dashed', marker='o', color='orange')
+            plt.legend()
+            plt.xlabel("Date")
+            plt.ylabel("Values")
+            plt.title("ARIMA Forecast")
+            plt.grid(True)
+            st.pyplot(plt)
+
+            # Display forecast values
+            st.write("### Forecasted Values")
+            st.dataframe(forecast_df)
+
+        except Exception as e:
+            st.error(f"Error in ARIMA forecasting: {e}")
