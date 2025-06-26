@@ -1,0 +1,7 @@
+React
+TailwindCSS
+Lucide icons
+Smooth transitions
+Vite as the build tool
+
+package.json
