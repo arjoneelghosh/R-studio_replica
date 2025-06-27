@@ -10,6 +10,7 @@ from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error
 from datetime import datetime
 
+#hi
 # Title of the Streamlit app
 st.title("🌍 Real-Time AQI Data with Forecasting")
 
